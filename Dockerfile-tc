@@ -1,4 +1,4 @@
-FROM hub-bigdata.17usoft.com/bigdata/ubuntu:22.04
+FROM hub-bigdata.17usoft.com/bigdata/python:3.12
 
 ARG NODE_VERSION=v25.6.0
 ARG OPENCLAW_VERSION=2026.2.26
@@ -24,6 +24,20 @@ ENV PATH=$PATH:$PNPM_HOME
 
 RUN npm install -g --registry=https://registry.npmmirror.com pnpm
 
+RUN pip install \
+    numpy \
+    pandas \
+    matplotlib \
+    seaborn \
+    scikit-learn \
+    requests \
+    beautifulsoup4 \
+    pillow \
+    openpyxl \
+    python-docx \
+    pyautogui \
+    opencv-python
+
 # 安装openclaw
 #RUN npm install -g --registry=https://registry.npmmirror.com openclaw@${OPENCLAW_VERSION}
 
@@ -42,7 +56,6 @@ ENV OPENCLAW_PREFER_PNPM=1
 RUN pnpm ui:build
 
 # Expose the CLI binary without requiring npm global writes as non-root.
-USER root
 RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
  && chmod 755 /app/openclaw.mjs
 
