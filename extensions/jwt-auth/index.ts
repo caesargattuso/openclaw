@@ -149,7 +149,7 @@ function needsAuthentication(skillDir: string): boolean {
 // ============================================================================
 
 function getJwtOutputDir(): string {
-  return path.join(os.homedir(), ".openclaw", "jwt");
+  return path.join(os.homedir(), ".openclaw", "workspace", "jwt");
 }
 
 function ensureJwtOutputDir(): void {
