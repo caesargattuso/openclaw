@@ -30,12 +30,10 @@ type JwtAuthConfig = {
   jwtUrl: string;
   /** 请求 JWT 时的成员唯一 ID */
   memberUniqueId: string;
-  /** JWT 有效期（分钟），可选，默认 60 */
-  expireMinutes?: number;
   /** 定时刷新间隔（分钟），默认 45 */
   refreshIntervalMinutes?: number;
-  /** Skills 目录路径（可选，默认自动检测） */
-  skillsDir?: string;
+  /** Skills 目录路径列表 */
+  skillsDir: string[];
 };
 
 // ============================================================================
@@ -55,9 +53,13 @@ const skillTimers = new Map<string, ReturnType<typeof setInterval>>();
 function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
   const raw = api.pluginConfig as Partial<JwtAuthConfig> | undefined;
 
-  if (!raw?.jwtUrl || !raw?.memberUniqueId) {
+  const skillsDir = Array.isArray(raw?.skillsDir)
+    ? raw.skillsDir.filter((d): d is string => typeof d === "string" && d.trim() !== "")
+    : [];
+
+  if (!raw?.jwtUrl || !raw?.memberUniqueId || skillsDir.length === 0) {
     api.logger.warn(
-      "jwt-auth: missing required config (jwtUrl, memberUniqueId). Plugin disabled.",
+      "jwt-auth: missing required config (jwtUrl, memberUniqueId, skillsDir). Plugin disabled.",
     );
     return null;
   }
@@ -66,9 +68,8 @@ function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
     enabled: raw.enabled ?? true,
     jwtUrl: raw.jwtUrl,
     memberUniqueId: raw.memberUniqueId,
-    expireMinutes: raw.expireMinutes,
     refreshIntervalMinutes: raw.refreshIntervalMinutes ?? 45,
-    skillsDir: raw.skillsDir,
+    skillsDir,
   };
 }
 
@@ -77,27 +78,7 @@ function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
 // ============================================================================
 
 function getPossibleSkillsDirs(config: JwtAuthConfig): string[] {
-  const dirs: string[] = [];
-
-  try {
-    // 1. 当前工作目录的 skills/
-    dirs.push(path.join(process.cwd(), "skills"));
-
-    // 2. 用户 home 目录的 .openclaw/skills/
-    const homeDir = os.homedir();
-    if (homeDir) {
-      dirs.push(path.join(homeDir, ".openclaw", "skills"));
-    }
-
-    // 3. 配置的 skillsDir
-    if (config.skillsDir) {
-      dirs.push(config.skillsDir);
-    }
-  } catch {
-    // ignore
-  }
-
-  return dirs;
+  return config.skillsDir;
 }
 
 /**
@@ -168,15 +149,11 @@ async function fetchJwt(params: {
   jwtUrl: string;
   memberUniqueId: string;
   skillName: string;
-  expireMinutes?: number;
 }): Promise<string> {
-  const body: Record<string, unknown> = {
+  const body = {
     memberUniqueId: params.memberUniqueId,
     skillName: params.skillName,
   };
-  if (params.expireMinutes != null) {
-    body.expireMinutes = params.expireMinutes;
-  }
 
   const resp = await fetch(params.jwtUrl, {
     method: "POST",
@@ -219,7 +196,6 @@ async function refreshJwtForSkill(params: {
       jwtUrl: config.jwtUrl,
       memberUniqueId: config.memberUniqueId,
       skillName,
-      expireMinutes: config.expireMinutes,
     });
 
     ensureJwtOutputDir();

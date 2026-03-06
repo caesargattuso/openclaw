@@ -24,14 +24,11 @@
           // 请求 JWT 时使用的成员唯一 ID
           "memberUniqueId": "your-member-unique-id",
 
-          // 可选：JWT 有效期（分钟），不填则使用服务端默认值（60分钟）
-          // "expireMinutes": 60,
-
           // 可选：JWT 刷新间隔（分钟），默认 45 分钟
           "refreshIntervalMinutes": 45,
 
-          // 可选：Skills 目录路径（默认自动检测当前目录 skills/ 和 ~/.openclaw/skills/）
-          // "skillsDir": "/path/to/your/skills"
+          // Skills 目录路径列表（必填）
+          "skillsDir": ["/home/openclaw/.openclaw/skills"]
         }
       }
     }

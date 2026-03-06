@@ -6,7 +6,7 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["jwtUrl", "memberUniqueId"],
+    "required": ["jwtUrl", "memberUniqueId", "skillsDir"],
     "properties": {
       "enabled": {
         "type": "boolean",
@@ -25,11 +25,6 @@
         "type": "string",
         "description": "Member unique ID sent in the JWT request body"
       },
-      "expireMinutes": {
-        "type": "number",
-        "description": "JWT expiry in minutes (optional, server default is 60)",
-        "examples": [60, 120]
-      },
       "refreshIntervalMinutes": {
         "type": "number",
         "description": "How often to refresh the JWT (minutes). Default: 45",
@@ -37,9 +32,10 @@
         "examples": [30, 45, 60]
       },
       "skillsDir": {
-        "type": "string",
-        "description": "Custom skills directory path (default: auto-detect from cwd/skills and ~/.openclaw/skills)",
-        "examples": ["/path/to/skills", "C:\\\\Users\\\\user\\\\skills"]
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of skills directory paths to scan for skill config.yaml files",
+        "examples": [["/path/to/skills"], ["/path/a", "/path/b"]]
       }
     }
   }

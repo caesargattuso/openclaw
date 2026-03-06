@@ -44,9 +44,10 @@
         "default": "检测到敏感 skill 调用，已切换到安全模型。会话已锁定，无法切换回其他模型。"
       },
       "skillsDir": {
-        "type": "string",
-        "description": "Custom skills directory path (default: auto-detect from cwd and ~/.openclaw/skills)",
-        "examples": ["/path/to/skills", "C:\\\\Users\\\\user\\\\skills"]
+        "type": "array",
+        "items": { "type": "string" },
+        "description": "List of skills directory paths to scan for SKILL.md files",
+        "examples": [["/path/to/skills"], ["/path/a", "/path/b"]]
       }
     }
   }

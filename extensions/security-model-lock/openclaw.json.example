@@ -31,8 +31,8 @@
           // 可选：自定义锁定提示消息
           "lockNotice": "检测到敏感 skill 调用，已切换到安全模型。请重新发送消息。",
 
-          // 可选：Skills 目录路径（默认自动检测当前目录和~/.openclaw/skills）
-          "skillsDir": "/path/to/your/skills"
+          // 可选：Skills 目录路径列表
+          "skillsDir": ["/home/openclaw/.openclaw/skills"]
         }
       }
     }

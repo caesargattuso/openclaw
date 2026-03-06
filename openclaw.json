@@ -73,6 +73,7 @@
             },
             "userTimezone": "Asia/Shanghai",
             "thinkingDefault": "high",
+            "reasoningDefault": "on",
             "verboseDefault": "on",
             "maxConcurrent": 4,
             "subagents": {
@@ -137,7 +138,7 @@
                 "config": {
                     "sensitiveSkills": [
                     ],
-                    "skillsDir": "/app/skills",
+                    "skillsDir": ["/app/skills"],
                     "secureModel": {
                         "provider": "oneai",
                         "model": "glm-5"
@@ -149,7 +150,7 @@
                 "config": {
                     "jwtUrl": "${JWT_URL}",
                     "memberUniqueId": "${MEMBER_UNIQUE_ID}",
-                    "skillsDir": "/app/skills"
+                    "skillsDir": ["/app/skills"]
                 }
             }
         }
