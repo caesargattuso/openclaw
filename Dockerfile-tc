@@ -3,11 +3,6 @@ FROM hub-bigdata.17usoft.com/bigdata/python:3.12
 ARG NODE_VERSION=v25.6.0
 ARG OPENCLAW_VERSION=2026.2.26
 
-# 安装 gosu 用于降权执行
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gosu && \
-    rm -rf /var/lib/apt/lists/*
-
 # 创建 openclaw 用户
 RUN groupadd -r openclaw && \
     useradd -r -g openclaw -m -s /bin/bash openclaw
@@ -21,8 +16,27 @@ RUN wget -q https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-linux-x
 ENV PATH=/usr/local/node/bin:$PATH
 ENV PNPM_HOME=/usr/local/pnpm
 ENV PATH=$PATH:$PNPM_HOME
+ENV NODE_ENV=production
 
 RUN npm install -g --registry=https://registry.npmmirror.com pnpm
+
+WORKDIR /app
+
+COPY --chown=openclaw:openclaw package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY --chown=openclaw:openclaw ui/package.json ./ui/package.json
+COPY --chown=openclaw:openclaw patches ./patches
+COPY --chown=openclaw:openclaw scripts ./scripts
+
+RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile
+
+RUN apt-get update && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gosu xvfb && \
+      mkdir -p /home/openclaw/.cache/ms-playwright && \
+      PLAYWRIGHT_BROWSERS_PATH=/home/openclaw/.cache/ms-playwright \
+      node /app/node_modules/playwright-core/cli.js install --with-deps chromium && \
+      chown -R openclaw:openclaw /home/openclaw/.cache/ms-playwright && \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 RUN pip install \
     numpy \
@@ -41,9 +55,7 @@ RUN pip install \
 # 安装openclaw
 #RUN npm install -g --registry=https://registry.npmmirror.com openclaw@${OPENCLAW_VERSION}
 
-WORKDIR /app
 COPY --chown=openclaw:openclaw . .
-RUN NODE_OPTIONS=--max-old-space-size=2048 pnpm install --frozen-lockfile
 RUN for dir in /app/extensions /app/.agent /app/.agents; do \
       if [ -d "$dir" ]; then \
         find "$dir" -type d -exec chmod 755 {} +; \
