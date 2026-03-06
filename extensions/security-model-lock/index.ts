@@ -56,8 +56,8 @@ type SecurityModelLockConfig = {
   enabled?: boolean;
   /** 锁定提示消息 */
   lockNotice?: string;
-  /** Skills 目录路径（可选，默认自动检测） */
-  skillsDir?: string;
+  /** Skills 目录路径列表 */
+  skillsDir?: string[];
 };
 
 /**
@@ -173,31 +173,10 @@ function scanSkillsDirs(skillsDirs: string[]): Set<string> {
 }
 
 /**
- * 获取可能的 skills 目录列表
+ * 获取 skills 目录列表（仅使用配置中指定的目录）
  */
-function getPossibleSkillsDirs(api: OpenClawPluginApi, config: SecurityModelLockConfig): string[] {
-  const dirs: string[] = [];
-
-  try {
-    // 1. 当前工作目录的 skills/
-    const cwd = process.cwd();
-    dirs.push(path.join(cwd, "skills"));
-
-    // 2. 用户 home 目录的 .openclaw/skills/
-    const homeDir = process.env.HOME || process.env.USERPROFILE || "";
-    if (homeDir) {
-      dirs.push(path.join(homeDir, ".openclaw", "skills"));
-    }
-
-    // 3. 配置的 skillsDir
-    if (config.skillsDir) {
-      dirs.push(config.skillsDir);
-    }
-  } catch {
-    // ignore
-  }
-
-  return dirs;
+function getPossibleSkillsDirs(_api: OpenClawPluginApi, config: SecurityModelLockConfig): string[] {
+  return config.skillsDir?.filter((d) => d.trim() !== "") ?? [];
 }
 
 /**
