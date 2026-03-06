@@ -6,7 +6,7 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["jwtUrl", "userId", "spaceId"],
+    "required": ["jwtUrl", "memberUniqueId"],
     "properties": {
       "enabled": {
         "type": "boolean",
@@ -21,13 +21,9 @@
           "https://toca.qa.17u.cn/open-api/auth/openclaw-jwt"
         ]
       },
-      "userId": {
+      "memberUniqueId": {
         "type": "string",
-        "description": "User ID sent in the JWT request body"
-      },
-      "spaceId": {
-        "type": "string",
-        "description": "Space ID sent in the JWT request body"
+        "description": "Member unique ID sent in the JWT request body"
       },
       "expireMinutes": {
         "type": "number",

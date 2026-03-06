@@ -28,10 +28,8 @@ type JwtAuthConfig = {
   enabled?: boolean;
   /** 获取 JWT 的接口 URL（POST） */
   jwtUrl: string;
-  /** 请求 JWT 时的 userId */
-  userId: string;
-  /** 请求 JWT 时的 spaceId */
-  spaceId: string;
+  /** 请求 JWT 时的成员唯一 ID */
+  memberUniqueId: string;
   /** JWT 有效期（分钟），可选，默认 60 */
   expireMinutes?: number;
   /** 定时刷新间隔（分钟），默认 45 */
@@ -57,9 +55,9 @@ const skillTimers = new Map<string, ReturnType<typeof setInterval>>();
 function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
   const raw = api.pluginConfig as Partial<JwtAuthConfig> | undefined;
 
-  if (!raw?.jwtUrl || !raw?.userId || !raw?.spaceId) {
+  if (!raw?.jwtUrl || !raw?.memberUniqueId) {
     api.logger.warn(
-      "jwt-auth: missing required config (jwtUrl, userId, spaceId). Plugin disabled.",
+      "jwt-auth: missing required config (jwtUrl, memberUniqueId). Plugin disabled.",
     );
     return null;
   }
@@ -67,8 +65,7 @@ function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
   return {
     enabled: raw.enabled ?? true,
     jwtUrl: raw.jwtUrl,
-    userId: raw.userId,
-    spaceId: raw.spaceId,
+    memberUniqueId: raw.memberUniqueId,
     expireMinutes: raw.expireMinutes,
     refreshIntervalMinutes: raw.refreshIntervalMinutes ?? 45,
     skillsDir: raw.skillsDir,
@@ -169,14 +166,12 @@ function getJwtOutputPath(skillName: string): string {
 
 async function fetchJwt(params: {
   jwtUrl: string;
-  userId: string;
-  spaceId: string;
+  memberUniqueId: string;
   skillName: string;
   expireMinutes?: number;
 }): Promise<string> {
   const body: Record<string, unknown> = {
-    userId: params.userId,
-    spaceId: params.spaceId,
+    memberUniqueId: params.memberUniqueId,
     skillName: params.skillName,
   };
   if (params.expireMinutes != null) {
@@ -187,6 +182,7 @@ async function fetchJwt(params: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(5000),
   });
 
   if (!resp.ok) {
@@ -221,8 +217,7 @@ async function refreshJwtForSkill(params: {
   try {
     const jwt = await fetchJwt({
       jwtUrl: config.jwtUrl,
-      userId: config.userId,
-      spaceId: config.spaceId,
+      memberUniqueId: config.memberUniqueId,
       skillName,
       expireMinutes: config.expireMinutes,
     });

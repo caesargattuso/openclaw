@@ -73,8 +73,7 @@ function createMockApi(pluginConfig: Record<string, unknown> = {}): OpenClawPlug
     config: {},
     pluginConfig: {
       jwtUrl: "https://example.com/jwt",
-      userId: "user-123",
-      spaceId: "space-456",
+      memberUniqueId: "1602657561654349857",
       refreshIntervalMinutes: 45,
       ...pluginConfig,
     },
@@ -177,7 +176,7 @@ describe("jwt-auth plugin", () => {
         source: "test",
         config: {},
         pluginConfig: {
-          // jwtUrl, userId, spaceId are all missing
+          // jwtUrl, memberUniqueId are all missing
         },
         logger: {
           info: vi.fn(),

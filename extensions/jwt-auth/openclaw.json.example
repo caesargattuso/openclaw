@@ -21,11 +21,8 @@
           // 测试环境：https://toca.qa.17u.cn/open-api/auth/openclaw-jwt
           "jwtUrl": "https://toca.17u.cn/open-api/auth/openclaw-jwt",
 
-          // 请求 JWT 时使用的用户 ID（管家侧用户ID）
-          "userId": "your-user-id",
-
-          // 请求 JWT 时使用的空间 ID（管家侧空间ID）
-          "spaceId": "your-space-id",
+          // 请求 JWT 时使用的成员唯一 ID
+          "memberUniqueId": "your-member-unique-id",
 
           // 可选：JWT 有效期（分钟），不填则使用服务端默认值（60分钟）
           // "expireMinutes": 60,

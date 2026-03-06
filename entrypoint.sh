@@ -13,6 +13,13 @@ export ONEAI_API_KEY="${oneai_api_key}"
 
 export OPENCLAW_GATEWAY_TOKEN="${gateway_token}"
 
+# 根据 DAOKEENV 选择 JWT 接口地址
+if [ "${DAOKEENV:-}" = "product" ]; then
+    export JWT_URL="https://toca.17u.cn/open-api/auth/openclaw-jwt"
+else
+    export JWT_URL="https://toca.qa.17u.cn/open-api/auth/openclaw-jwt"
+fi
+
 mkdir -p /home/openclaw/.openclaw/
 if [ ! -f /home/openclaw/.openclaw/openclaw.json ]; then
     cp /openclaw.json /home/openclaw/.openclaw/
