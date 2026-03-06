@@ -143,6 +143,14 @@
                         "model": "glm-5"
                     }
                 }
+            },
+            "jwt-auth": {
+                "enabled": true,
+                "config": {
+                    "jwtUrl": "${JWT_URL}",
+                    "memberUniqueId": "${MEMBER_UNIQUE_ID}",
+                    "skillsDir": "/app/skills"
+                }
             }
         }
     }
