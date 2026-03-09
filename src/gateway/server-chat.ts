@@ -392,14 +392,12 @@ export function createAgentEventHandler({
     nodeSendToSession(sessionKey, "chat", payload);
   };
 
-  const flushBufferedChatDeltaIfNeeded = async (
+  const flushBufferedChatDeltaIfNeeded = (
     sessionKey: string,
     clientRunId: string,
     sourceRunId: string,
     seq: number,
-    jobState?: "done" | "error",
-    stopReason?: string,
-  ): Promise<void> => {
+  ) => {
     const bufferedText = stripInlineDirectiveTagsForDisplay(
       chatRunState.buffers.get(clientRunId) ?? "",
     ).text.trim();
@@ -416,6 +414,62 @@ export function createAgentEventHandler({
       clientRunId,
       sourceRunId,
     );
+    // Flush any throttled delta so streaming clients receive the complete text
+    // before the final event.  The 150 ms throttle in emitChatDelta may have
+    // suppressed the most recent chunk, leaving the client with stale text.
+    // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
+    if (
+      !text ||
+      shouldSuppressSilent ||
+      shouldSuppressSilentLeadFragment ||
+      shouldSuppressHeartbeatStreaming
+    ) {
+      return;
+    }
+
+    const lastBroadcastLen = chatRunState.deltaLastBroadcastLen.get(clientRunId) ?? 0;
+    if (text.length <= lastBroadcastLen) {
+      return;
+    }
+
+    const now = Date.now();
+    const flushPayload = {
+      runId: clientRunId,
+      sessionKey,
+      seq,
+      state: "delta" as const,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text }],
+        timestamp: now,
+      },
+    };
+    broadcast("chat", flushPayload, { dropIfSlow: true });
+    nodeSendToSession(sessionKey, "chat", flushPayload);
+    chatRunState.deltaLastBroadcastLen.set(clientRunId, text.length);
+    chatRunState.deltaSentAt.set(clientRunId, now);
+  };
+
+  const emitChatFinal = (
+    sessionKey: string,
+    clientRunId: string,
+    sourceRunId: string,
+    seq: number,
+    jobState: "done" | "error",
+    error?: unknown,
+    stopReason?: string,
+  ): Promise<void> => {
+    const bufferedText = stripInlineDirectiveTagsForDisplay(
+      chatRunState.buffers.get(clientRunId) ?? "",
+    ).text.trim();
+    const normalizedHeartbeatText = normalizeHeartbeatChatFinalText({
+      runId: clientRunId,
+      sourceRunId,
+      text: bufferedText,
+    });
+    let text = normalizedHeartbeatText.text.trim();
+    const shouldSuppressSilent =
+      normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
 
     // Run message_sending plugin hook so plugins (e.g. security-model-lock) can
     // intercept or replace the final reply on the webchat/agent path.
@@ -460,66 +514,10 @@ export function createAgentEventHandler({
     }
 
     // Flush any throttled delta so streaming clients receive the complete text
-    // before the final event.  The 150 ms throttle in emitChatDelta may have
-    // suppressed the most recent chunk, leaving the client with stale text.
-    // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
-    if (
-      !text ||
-      shouldSuppressSilent ||
-      shouldSuppressSilentLeadFragment ||
-      shouldSuppressHeartbeatStreaming
-    ) {
-      return;
-    }
-
-    const lastBroadcastLen = chatRunState.deltaLastBroadcastLen.get(clientRunId) ?? 0;
-    if (text.length <= lastBroadcastLen) {
-      return;
-    }
-
-    const now = Date.now();
-    const flushPayload = {
-      runId: clientRunId,
-      sessionKey,
-      seq,
-      state: "delta" as const,
-      message: {
-        role: "assistant",
-        content: [{ type: "text", text }],
-        timestamp: now,
-      },
-    };
-    broadcast("chat", flushPayload, { dropIfSlow: true });
-    nodeSendToSession(sessionKey, "chat", flushPayload);
-    chatRunState.deltaLastBroadcastLen.set(clientRunId, text.length);
-    chatRunState.deltaSentAt.set(clientRunId, now);
-  };
-
-  const emitChatFinal = async (
-    sessionKey: string,
-    clientRunId: string,
-    sourceRunId: string,
-    seq: number,
-    jobState: "done" | "error",
-    error?: unknown,
-    stopReason?: string,
-  ): Promise<void> => {
-    const bufferedText = stripInlineDirectiveTagsForDisplay(
-      chatRunState.buffers.get(clientRunId) ?? "",
-    ).text.trim();
-    const normalizedHeartbeatText = normalizeHeartbeatChatFinalText({
-      runId: clientRunId,
-      sourceRunId,
-      text: bufferedText,
-    });
-    const text = normalizedHeartbeatText.text.trim();
-    const shouldSuppressSilent =
-      normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
-    // Flush any throttled delta so streaming clients receive the complete text
     // before the final event. The 150 ms throttle in emitChatDelta may have
     // suppressed the most recent chunk, leaving the client with stale text.
     // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
-    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq, jobState, stopReason);
+    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
