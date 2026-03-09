@@ -392,12 +392,12 @@ export function createAgentEventHandler({
     nodeSendToSession(sessionKey, "chat", payload);
   };
 
-  const flushBufferedChatDeltaIfNeeded = (
+  const flushBufferedChatDeltaIfNeeded = async (
     sessionKey: string,
     clientRunId: string,
     sourceRunId: string,
     seq: number,
-  ) => {
+  ): Promise<void> => {
     const bufferedText = stripInlineDirectiveTagsForDisplay(
       chatRunState.buffers.get(clientRunId) ?? "",
     ).text.trim();
@@ -493,7 +493,7 @@ export function createAgentEventHandler({
     chatRunState.deltaSentAt.set(clientRunId, now);
   };
 
-  const emitChatFinal = (
+  const emitChatFinal = async (
     sessionKey: string,
     clientRunId: string,
     sourceRunId: string,
@@ -501,7 +501,7 @@ export function createAgentEventHandler({
     jobState: "done" | "error",
     error?: unknown,
     stopReason?: string,
-  ) => {
+  ): Promise<void> => {
     const bufferedText = stripInlineDirectiveTagsForDisplay(
       chatRunState.buffers.get(clientRunId) ?? "",
     ).text.trim();
@@ -517,7 +517,7 @@ export function createAgentEventHandler({
     // before the final event. The 150 ms throttle in emitChatDelta may have
     // suppressed the most recent chunk, leaving the client with stale text.
     // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
-    flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
+    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
@@ -622,7 +622,7 @@ export function createAgentEventHandler({
       // Flush pending assistant text before tool-start events so clients can
       // render complete pre-tool text above tool cards (not truncated by delta throttle).
       if (toolPhase === "start" && isControlUiVisible && sessionKey && !isAborted) {
-        flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, evt.runId, evt.seq);
+        void flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, evt.runId, evt.seq);
       }
       // Always broadcast tool events to registered WS recipients with
       // tool-events capability, regardless of verboseLevel. The verbose
