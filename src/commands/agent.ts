@@ -585,7 +585,7 @@ async function prepareAgentCommandExecution(
     throw new Error('Invalid verbose level. Use "on", "full", or "off".');
   }
 
-  const reasoningOverride =
+  const reasoningOverride: ReasoningLevel | undefined =
     opts.reasoning === "off" || opts.reasoning === "on" || opts.reasoning === "stream"
       ? opts.reasoning
       : undefined;
@@ -667,6 +667,7 @@ async function prepareAgentCommandExecution(
     thinkOverride,
     thinkOnce,
     verboseOverride,
+    reasoningOverride,
     timeoutMs,
     sessionId,
     sessionKey,
@@ -700,6 +701,7 @@ async function agentCommandInternal(
     thinkOverride,
     thinkOnce,
     verboseOverride,
+    reasoningOverride,
     timeoutMs,
     sessionId,
     sessionKey,
