@@ -450,7 +450,7 @@ export function createAgentEventHandler({
     chatRunState.deltaSentAt.set(clientRunId, now);
   };
 
-  const emitChatFinal = (
+  const emitChatFinal = async (
     sessionKey: string,
     clientRunId: string,
     sourceRunId: string,
