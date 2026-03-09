@@ -397,6 +397,8 @@ export function createAgentEventHandler({
     clientRunId: string,
     sourceRunId: string,
     seq: number,
+    jobState?: "done" | "error",
+    stopReason?: string,
   ): Promise<void> => {
     const bufferedText = stripInlineDirectiveTagsForDisplay(
       chatRunState.buffers.get(clientRunId) ?? "",
@@ -517,7 +519,7 @@ export function createAgentEventHandler({
     // before the final event. The 150 ms throttle in emitChatDelta may have
     // suppressed the most recent chunk, leaving the client with stale text.
     // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
-    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
+    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq, jobState, stopReason);
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
