@@ -1,0 +1,15 @@
+{
+  "name": "@openclaw/jwt-auth",
+  "version": "1.0.0",
+  "description": "Automatically fetch and refresh JWT tokens when skill config.yaml has need_authentication=true.",
+  "type": "module",
+  "private": true,
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "openclaw": "workspace:*"
+  }
+}

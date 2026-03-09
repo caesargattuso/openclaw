@@ -579,11 +579,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     state.lastStreamedReasoningRaw = trimmed;
 
     const formatted = formatReasoningMessage(trimmed);
-    // Compute formatted delta - only add "Reasoning:" prefix for full text,
-    // delta should be incremental without prefix.
-    const delta = deltaRaw
-      ? formatReasoningMessage(deltaRaw).replace(/^Reasoning:\n/, "")
-      : "";
+    // Delta should be raw incremental text without markdown formatting (e.g., no _italics_).
+    // Clients should render formatting from the full `text` field; `delta` is for positioning/scrolling.
+    const delta = deltaRaw;
     state.lastStreamedReasoning = formatted;
 
     // Broadcast thinking event to WebSocket clients in real-time
