@@ -500,11 +500,11 @@ export function createAgentEventHandler({
             return;
           }
           if (typeof hookResult?.content === "string" && hookResult.content !== text) {
-            // Plugin replaced the text; update text and override the buffer so the
-            // flush delta below sends the replacement to streaming clients.
+            // Plugin replaced the text; update text and clear the buffer so the
+            // flush delta below does NOT re-send the original streamed content.
+            // The replacement arrives via the final event only.
             text = hookResult.content;
-            chatRunState.buffers.set(clientRunId, text);
-            // Reset broadcast length so the flush delta is always sent.
+            chatRunState.buffers.delete(clientRunId);
             chatRunState.deltaLastBroadcastLen.delete(clientRunId);
           }
         } catch {
