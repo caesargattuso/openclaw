@@ -9,7 +9,7 @@
       "./index.ts"
     ]
   },
-  "dependencies": {
-    "openclaw": "workspace:*"
+  "peerDependencies": {
+    "openclaw": "*"
   }
 }
