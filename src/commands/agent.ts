@@ -50,6 +50,7 @@ import {
   normalizeThinkLevel,
   normalizeVerboseLevel,
   supportsXHighThinking,
+  type ReasoningLevel,
   type ThinkLevel,
   type VerboseLevel,
 } from "../auto-reply/thinking.js";
@@ -338,6 +339,7 @@ function runAgentAttempt(params: {
   messageChannel: ReturnType<typeof resolveMessageChannel>;
   skillsSnapshot: ReturnType<typeof buildWorkspaceSkillSnapshot> | undefined;
   resolvedVerboseLevel: VerboseLevel | undefined;
+  resolvedReasoningLevel: ReasoningLevel | undefined;
   agentDir: string;
   onAgentEvent: (evt: { stream: string; data?: Record<string, unknown> }) => void;
   primaryProvider: string;
@@ -486,6 +488,7 @@ function runAgentAttempt(params: {
     authProfileIdSource: authProfileId ? params.sessionEntry?.authProfileOverrideSource : undefined,
     thinkLevel: params.resolvedThinkLevel,
     verboseLevel: params.resolvedVerboseLevel,
+    reasoningLevel: params.resolvedReasoningLevel,
     timeoutMs: params.timeoutMs,
     runId: params.runId,
     lane: params.opts.lane,
@@ -582,6 +585,14 @@ async function prepareAgentCommandExecution(
     throw new Error('Invalid verbose level. Use "on", "full", or "off".');
   }
 
+  const reasoningOverride: ReasoningLevel | undefined =
+    opts.reasoning === "off" || opts.reasoning === "on" || opts.reasoning === "stream"
+      ? opts.reasoning
+      : undefined;
+  if (opts.reasoning && !reasoningOverride) {
+    throw new Error('Invalid reasoning level. Use "on", "stream", or "off".');
+  }
+
   const laneRaw = typeof opts.lane === "string" ? opts.lane.trim() : "";
   const isSubagentLane = laneRaw === String(AGENT_LANE_SUBAGENT);
   const timeoutSecondsRaw =
@@ -656,6 +667,7 @@ async function prepareAgentCommandExecution(
     thinkOverride,
     thinkOnce,
     verboseOverride,
+    reasoningOverride,
     timeoutMs,
     sessionId,
     sessionKey,
@@ -689,6 +701,7 @@ async function agentCommandInternal(
     thinkOverride,
     thinkOnce,
     verboseOverride,
+    reasoningOverride,
     timeoutMs,
     sessionId,
     sessionKey,
@@ -865,11 +878,16 @@ async function agentCommandInternal(
     let resolvedThinkLevel = thinkOnce ?? thinkOverride ?? persistedThinking;
     const resolvedVerboseLevel =
       verboseOverride ?? persistedVerbose ?? (agentCfg?.verboseDefault as VerboseLevel | undefined);
+    const resolvedReasoningLevel =
+      reasoningOverride ??
+      (sessionEntry?.reasoningLevel as ReasoningLevel | undefined) ??
+      (agentCfg?.reasoningDefault as ReasoningLevel | undefined);
 
     if (sessionKey) {
       registerAgentRunContext(runId, {
         sessionKey,
         verboseLevel: resolvedVerboseLevel,
+        isHeartbeat: false,
       });
     }
 
@@ -1129,6 +1147,7 @@ async function agentCommandInternal(
             messageChannel,
             skillsSnapshot,
             resolvedVerboseLevel,
+            resolvedReasoningLevel,
             agentDir,
             primaryProvider: provider,
             sessionStore,

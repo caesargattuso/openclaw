@@ -679,6 +679,7 @@ export const agentHandlers: GatewayRequestHandlers = {
         sessionId: resolvedSessionId,
         sessionKey: resolvedSessionKey,
         thinking: request.thinking,
+        reasoning: entry?.reasoningLevel ?? undefined,
         deliver,
         deliveryTargetMode,
         channel: resolvedChannel,
