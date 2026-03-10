@@ -4,6 +4,8 @@ import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
+import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
+import { INTERNAL_MESSAGE_CHANNEL } from "../utils/message-channel.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";
 import { loadSessionEntry } from "./session-utils.js";
 import { formatForLog } from "./ws-log.js";
@@ -404,7 +406,7 @@ export function createAgentEventHandler({
       sourceRunId,
       text: bufferedText,
     });
-    const text = normalizedHeartbeatText.text.trim();
+    let text = normalizedHeartbeatText.text.trim();
     const shouldSuppressSilent =
       normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
     const shouldSuppressSilentLeadFragment = isSilentReplyLeadFragment(text);
@@ -444,7 +446,7 @@ export function createAgentEventHandler({
     chatRunState.deltaSentAt.set(clientRunId, now);
   };
 
-  const emitChatFinal = (
+  const emitChatFinal = async (
     sessionKey: string,
     clientRunId: string,
     sourceRunId: string,
@@ -452,7 +454,7 @@ export function createAgentEventHandler({
     jobState: "done" | "error",
     error?: unknown,
     stopReason?: string,
-  ) => {
+  ): Promise<void> => {
     const bufferedText = stripInlineDirectiveTagsForDisplay(
       chatRunState.buffers.get(clientRunId) ?? "",
     ).text.trim();
@@ -461,14 +463,57 @@ export function createAgentEventHandler({
       sourceRunId,
       text: bufferedText,
     });
-    const text = normalizedHeartbeatText.text.trim();
+    let text = normalizedHeartbeatText.text.trim();
     const shouldSuppressSilent =
       normalizedHeartbeatText.suppress || isSilentReplyText(text, SILENT_REPLY_TOKEN);
+
+    // Run message_sending plugin hook so plugins (e.g. security-model-lock) can
+    // intercept or replace the final reply on the webchat/agent path.
+    // This mirrors the behaviour of deliver.ts for channel-based delivery.
+    if (jobState === "done" && text && !shouldSuppressSilent) {
+      const hookRunner = getGlobalHookRunner();
+      if (hookRunner?.hasHooks("message_sending")) {
+        try {
+          const hookResult = await hookRunner.runMessageSending(
+            { to: sessionKey, content: text, metadata: { channel: INTERNAL_MESSAGE_CHANNEL } },
+            { channelId: INTERNAL_MESSAGE_CHANNEL, conversationId: sessionKey },
+          );
+          if (hookResult?.cancel) {
+            // Plugin cancelled the message; clear buffers and emit a final with no message.
+            chatRunState.deltaLastBroadcastLen.delete(clientRunId);
+            chatRunState.buffers.delete(clientRunId);
+            chatRunState.deltaSentAt.delete(clientRunId);
+            const cancelPayload = {
+              runId: clientRunId,
+              sessionKey,
+              seq,
+              state: "final" as const,
+              ...(stopReason && { stopReason }),
+              message: undefined,
+            };
+            broadcast("chat", cancelPayload);
+            nodeSendToSession(sessionKey, "chat", cancelPayload);
+            return;
+          }
+          if (typeof hookResult?.content === "string" && hookResult.content !== text) {
+            // Plugin replaced the text; update text and clear the buffer so the
+            // flush delta below does NOT re-send the original streamed content.
+            // The replacement arrives via the final event only.
+            text = hookResult.content;
+            chatRunState.buffers.delete(clientRunId);
+            chatRunState.deltaLastBroadcastLen.delete(clientRunId);
+          }
+        } catch {
+          // Never block delivery on hook failure.
+        }
+      }
+    }
+
     // Flush any throttled delta so streaming clients receive the complete text
     // before the final event. The 150 ms throttle in emitChatDelta may have
     // suppressed the most recent chunk, leaving the client with stale text.
     // Only flush if the buffer has grown since the last broadcast to avoid duplicates.
-    flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
+    await flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, sourceRunId, seq);
     chatRunState.deltaLastBroadcastLen.delete(clientRunId);
     chatRunState.buffers.delete(clientRunId);
     chatRunState.deltaSentAt.delete(clientRunId);
@@ -573,7 +618,7 @@ export function createAgentEventHandler({
       // Flush pending assistant text before tool-start events so clients can
       // render complete pre-tool text above tool cards (not truncated by delta throttle).
       if (toolPhase === "start" && isControlUiVisible && sessionKey && !isAborted) {
-        flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, evt.runId, evt.seq);
+        void flushBufferedChatDeltaIfNeeded(sessionKey, clientRunId, evt.runId, evt.seq);
       }
       // Always broadcast tool events to registered WS recipients with
       // tool-events capability, regardless of verboseLevel. The verbose
@@ -607,7 +652,7 @@ export function createAgentEventHandler({
             clearAgentRunContext(evt.runId);
             return;
           }
-          emitChatFinal(
+          void emitChatFinal(
             finished.sessionKey,
             finished.clientRunId,
             evt.runId,
@@ -617,7 +662,7 @@ export function createAgentEventHandler({
             evtStopReason,
           );
         } else {
-          emitChatFinal(
+          void emitChatFinal(
             sessionKey,
             eventRunId,
             evt.runId,
