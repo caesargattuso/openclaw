@@ -77,12 +77,6 @@ RUN ln -sf /app/openclaw.mjs /usr/local/bin/openclaw \
 COPY --chown=openclaw:openclaw openclaw.json /openclaw.json
 COPY --chmod=755 entrypoint.sh /entrypoint.sh
 
-ENV SSO_ENV=qa
-WORKDIR /scripts/browser_daemon
-RUN wget http://oss.17usoft.com/toca-visual-express/product/im/8da3772a4b434a42ae1dfd6aeb442d79_585951698.zip -O browser_daemon.zip && \
-    unzip browser_daemon.zip && \
-    rm -rf browser_daemon.zip
-
 WORKDIR /scripts/home
 RUN cp /home/openclaw/.bash_logout . && \
     cp /home/openclaw/.bashrc . && \
@@ -95,6 +89,12 @@ ENV ONEAI_OPENAI_BASE_URL=https://oneai.17usoft.com/v1 \
     ONEAI_ANTHROPIC_BASE_URL=https://oneai.17usoft.com/anthropic
 
 COPY ["supervisord.conf", "/etc/"]
+
+ENV SSO_ENV=qa
+WORKDIR /scripts/browser_daemon
+RUN wget http://oss.17usoft.com/toca-visual-express/product/im/8da3772a4b434a42ae1dfd6aeb442d79_585951698.zip -O browser_daemon.zip && \
+    unzip browser_daemon.zip && \
+    rm -rf browser_daemon.zip
 
 WORKDIR /home/openclaw
 
