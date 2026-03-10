@@ -19,12 +19,12 @@ import path from "node:path";
  * 功能：
  * 1. 从 skills 目录读取 SKILL.md 文件，识别敏感 skills
  * 2. 在 before_tool_call hook 中检测 read 工具是否读取敏感 skill 文件
- * 3. 阻断工具调用并锁定会话
+ * 3. 阻断工具调用并锁定 agent（按 agentId 粒度，覆盖同 agent 下所有 session）
  * 4. 下次用户输入时自动切换到安全模型
  */
 
-// 会话锁定状态存储（内存）
-const sessionLocks = new Map<string, SecureModelLockState>();
+// 锁定状态存储，key 为 agentId（内存）
+const agentLocks = new Map<string, SecureModelLockState>();
 
 type SecureModelLockState = {
   lockedAt: number;
@@ -42,6 +42,32 @@ type SecureModelLockState = {
    */
   pendingNotice: boolean;
 };
+
+/**
+ * 从 sessionKey 中提取 agentId 段。
+ * 规范格式：agent:<agentId>:<rest>
+ * 无法解析时 fallback 到 "main"。
+ */
+function agentIdFromSessionKey(sessionKey: string | undefined): string {
+  const raw = (sessionKey ?? "").trim().toLowerCase();
+  if (!raw) {
+    return "main";
+  }
+  const parts = raw.split(":").filter(Boolean);
+  // agent:<agentId>:<rest> — 至少三段
+  if (parts.length >= 3 && parts[0] === "agent" && parts[1]) {
+    return parts[1];
+  }
+  return "main";
+}
+
+/**
+ * 解析 lock key：优先使用 agentId，若不可用则从 sessionKey 提取。
+ */
+function resolveLockKey(agentId: string | undefined, sessionKey: string | undefined): string {
+  const id = (agentId ?? "").trim().toLowerCase();
+  return id || agentIdFromSessionKey(sessionKey);
+}
 
 // 插件配置 Schema
 type SecurityModelLockConfig = {
@@ -80,31 +106,24 @@ function parseConfig(api: OpenClawPluginApi): SecurityModelLockConfig {
 }
 
 /**
- * 检查会话是否已锁定
+ * 检查 agent 是否已锁定
  */
-function isSessionLocked(sessionKey?: string): boolean {
-  if (!sessionKey) {
-    return false;
-  }
-  const state = sessionLocks.get(sessionKey);
-  return state != null;
+function isAgentLocked(lockKey: string): boolean {
+  return agentLocks.has(lockKey);
 }
 
 /**
  * 获取锁定状态
  */
-function getLockState(sessionKey?: string): SecureModelLockState | undefined {
-  if (!sessionKey) {
-    return undefined;
-  }
-  return sessionLocks.get(sessionKey);
+function getLockState(lockKey: string): SecureModelLockState | undefined {
+  return agentLocks.get(lockKey);
 }
 
 /**
- * 锁定会话
+ * 锁定 agent
  */
-function lockSession(params: {
-  sessionKey: string;
+function lockAgent(params: {
+  lockKey: string;
   reason: string;
   triggeredBySkill?: string;
   runId?: string;
@@ -118,18 +137,15 @@ function lockSession(params: {
     // 标记需要在本次 run 的出站消息中发送一次锁定通知
     pendingNotice: true,
   };
-  sessionLocks.set(params.sessionKey, state);
+  agentLocks.set(params.lockKey, state);
   return state;
 }
 
 /**
- * 解锁会话
+ * 解锁 agent
  */
-function unlockSession(sessionKey?: string): boolean {
-  if (!sessionKey) {
-    return false;
-  }
-  return sessionLocks.delete(sessionKey);
+function unlockAgent(lockKey: string): boolean {
+  return agentLocks.delete(lockKey);
 }
 
 /**
@@ -255,24 +271,29 @@ export default function register(api: OpenClawPluginApi) {
 
   // ============================================================================
   // before_tool_call hook - 两阶段拦截：
-  //   阶段 1：首次检测到 read 敏感 skill → 锁定会话并阻断本次工具调用。
-  //   阶段 2：会话已锁定 → 阻断所有后续工具调用，强制 LLM 立即停止执行，
+  //   阶段 1：首次检测到 read 敏感 skill → 锁定 agent 并阻断本次工具调用。
+  //   阶段 2：agent 已锁定 → 阻断所有后续工具调用，强制 LLM 立即停止执行，
   //           避免继续调用 web_search/exec/process 等工具绕过锁定。
   //           message_sending hook 会在 LLM 生成最终回复时将其替换为通知文本。
+  //
+  // 锁定粒度为 agentId，而非 sessionKey。
+  // 这样同一 agent 下的所有 session（含 cron :run:<uuid> session）都受同一把锁控制，
+  // 不会因 cron runSessionKey 每次不同而漏判。
   // ============================================================================
   api.on("before_tool_call", (event, ctx): PluginHookBeforeToolCallResult | void => {
     const { toolName, params } = event;
-    const { sessionKey, runId } = ctx;
+    const { agentId, sessionKey, runId } = ctx;
+    const lockKey = resolveLockKey(agentId, sessionKey);
 
-    api.logger.debug(`security-model-lock: before_tool_call: toolName=${toolName}, sessionKey=${sessionKey}`);
+    api.logger.debug(`security-model-lock: before_tool_call: toolName=${toolName}, agentId=${agentId}, sessionKey=${sessionKey}, lockKey=${lockKey}`);
 
-    // ── 阶段 2：会话已锁定，且当前仍在触发锁定的同一 run 内 → 阻断工具调用 ──
+    // ── 阶段 2：agent 已锁定，且当前仍在触发锁定的同一 run 内 → 阻断工具调用 ──
     // 只在同一 runId 内 block，避免用户重新发送请求后的合法工具调用被误 block。
-    if (isSessionLocked(sessionKey)) {
-      const lockState = getLockState(sessionKey);
+    if (isAgentLocked(lockKey)) {
+      const lockState = getLockState(lockKey);
       if (lockState?.lockRunId && lockState.lockRunId === runId) {
         api.logger.info(
-          `security-model-lock: session ${sessionKey} is locked, blocking tool call: ${toolName}`,
+          `security-model-lock: agent ${lockKey} is locked, blocking tool call: ${toolName} (session: ${sessionKey})`,
         );
         // 阻断并给出简短原因，让 LLM 停止工具调用；
         // 实际的用户通知文本由 message_sending hook 替换。
@@ -285,9 +306,9 @@ export default function register(api: OpenClawPluginApi) {
     }
 
     // ── 阶段 1：检测 read 工具是否读取敏感 skill 文件 ──────────────────────
-    // 如果会话已锁定（来自之前的 run），跳过阶段 1，避免安全模型在新 run 中
+    // 如果 agent 已锁定（来自之前的 run），跳过阶段 1，避免安全模型在新 run 中
     // 读取 SKILL.md 时被误判为再次触发敏感 skill，导致重复锁定。
-    if (isSessionLocked(sessionKey)) {
+    if (isAgentLocked(lockKey)) {
       return;
     }
 
@@ -311,20 +332,20 @@ export default function register(api: OpenClawPluginApi) {
     }
 
     api.logger.info(
-      `security-model-lock: sensitive skill detected: ${matchedSkill} via read ${filePath} (session: ${sessionKey}, run: ${runId})`,
+      `security-model-lock: sensitive skill detected: ${matchedSkill} via read ${filePath} (agentId: ${lockKey}, session: ${sessionKey}, run: ${runId})`,
     );
 
-    // 锁定会话，pendingNotice=true 让 message_sending hook 替换 LLM 生成的回复
+    // 锁定 agent，pendingNotice=true 让 message_sending hook 替换 LLM 生成的回复
     // 记录 runId 以便阶段 2 只在同一 run 内 block 工具调用
-    lockSession({
-      sessionKey: sessionKey!,
+    lockAgent({
+      lockKey,
       reason: `Sensitive skill "${matchedSkill}" was accessed via read tool`,
       triggeredBySkill: matchedSkill,
       runId: runId,
     });
 
     api.logger.info(
-      `security-model-lock: session ${sessionKey} locked, blocking tool call`,
+      `security-model-lock: agent ${lockKey} locked, blocking tool call (session: ${sessionKey})`,
     );
 
     // 阻断工具调用；LLM 会根据 blockReason 生成回复，
@@ -339,19 +360,17 @@ export default function register(api: OpenClawPluginApi) {
   // before_model_resolve hook - 切换模型
   // ============================================================================
   api.on("before_model_resolve", (event, ctx): PluginHookBeforeModelResolveResult | void => {
-    const { sessionKey } = ctx;
+    const { agentId, sessionKey } = ctx;
+    const lockKey = resolveLockKey(agentId, sessionKey);
 
-    // 检查会话是否已锁定
-    if (!isSessionLocked(sessionKey)) {
+    if (!isAgentLocked(lockKey)) {
       return;
     }
 
-    const lockState = getLockState(sessionKey);
     api.logger.info(
-      `security-model-lock: session ${sessionKey} is locked, switching to secure model`,
+      `security-model-lock: agent ${lockKey} is locked, switching to secure model (session: ${sessionKey})`,
     );
 
-    // 返回安全模型配置
     return {
       providerOverride: config.secureModel?.provider,
       modelOverride: config.secureModel?.model,
@@ -371,16 +390,15 @@ export default function register(api: OpenClawPluginApi) {
       event: PluginHookMessageSendingEvent,
       ctx: PluginHookMessageContext,
     ): PluginHookMessageSendingResult | void => {
-      // message_sending ctx 不携带 sessionKey；通过遍历锁定表找到有 pendingNotice 的会话。
-      // 由于单次 run 是串行的，同一时刻最多只有一个会话处于 pendingNotice 状态。
-      for (const [, state] of sessionLocks) {
+      // message_sending ctx 不携带 agentId；通过遍历锁定表找到有 pendingNotice 的 agent。
+      // 由于单次 run 是串行的，同一时刻最多只有一个 agent 处于 pendingNotice 状态。
+      for (const [, state] of agentLocks) {
         if (!state.pendingNotice) {
           continue;
         }
         // 消费标志，保证只替换一次
         state.pendingNotice = false;
 
-        const skillLabel = state.triggeredBySkill ? `"${state.triggeredBySkill}"` : "敏感";
         const notice =
           config.lockNotice ??
           `⚠️ 检测到敏感 skill 调用，会话已切换并固定为安全模型，请重新输入。切换其他模型请使用 /new 或 /reset命令重置会话。`;
@@ -395,29 +413,23 @@ export default function register(api: OpenClawPluginApi) {
   );
 
   // ============================================================================
-  // session_start / before_reset hook - 清理会话的锁定状态
+  // session_start / before_reset hook - 清理 agent 锁定状态
   // ============================================================================
   api.on("session_start", (event, ctx) => {
-    const { sessionKey } = ctx;
-    if (sessionKey) {
-      // 新会话开始时，清除该会话的锁定状态
-      const wasLocked = isSessionLocked(sessionKey);
-      if (wasLocked) {
-        unlockSession(sessionKey);
-        api.logger.info(`security-model-lock: session ${sessionKey} lock cleared on new session start`);
-      }
+    const { agentId, sessionKey } = ctx;
+    const lockKey = resolveLockKey(agentId, sessionKey);
+    if (isAgentLocked(lockKey)) {
+      unlockAgent(lockKey);
+      api.logger.info(`security-model-lock: agent ${lockKey} lock cleared on new session start (session: ${sessionKey})`);
     }
   });
 
   api.on("before_reset", (event, ctx) => {
-    const { sessionKey } = ctx;
-    if (sessionKey) {
-      // 会话重置时，清除该会话的锁定状态
-      const wasLocked = isSessionLocked(sessionKey);
-      if (wasLocked) {
-        unlockSession(sessionKey);
-        api.logger.info(`security-model-lock: session ${sessionKey} lock cleared on before_reset`);
-      }
+    const { agentId, sessionKey } = ctx;
+    const lockKey = resolveLockKey(agentId, sessionKey);
+    if (isAgentLocked(lockKey)) {
+      unlockAgent(lockKey);
+      api.logger.info(`security-model-lock: agent ${lockKey} lock cleared on before_reset (session: ${sessionKey})`);
     }
   });
 }
