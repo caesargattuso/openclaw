@@ -214,12 +214,37 @@ async function refreshJwtForSkill(params: {
 // 定时任务注册
 // ============================================================================
 
+/**
+ * 取消指定 skill 的定时任务并从注册表中移除
+ */
+function cancelJwtRefresh(skillName: string, logger: OpenClawPluginApi["logger"]): void {
+  const timer = skillTimers.get(skillName);
+  if (timer !== undefined) {
+    clearInterval(timer);
+    skillTimers.delete(skillName);
+  }
+  registeredSkills.delete(skillName);
+  logger.info(`jwt-auth: timer cancelled for deleted skill "${skillName}"`);
+}
+
+/**
+ * 检查 skill 目录是否仍然存在；不存在则取消定时任务并返回 false
+ */
+function checkSkillExists(skillDir: string, skillName: string, logger: OpenClawPluginApi["logger"]): boolean {
+  if (!fs.existsSync(skillDir)) {
+    cancelJwtRefresh(skillName, logger);
+    return false;
+  }
+  return true;
+}
+
 function scheduleJwtRefresh(params: {
   skillName: string;
+  skillDir: string;
   config: JwtAuthConfig;
   logger: OpenClawPluginApi["logger"];
 }): void {
-  const { skillName, config, logger } = params;
+  const { skillName, skillDir, config, logger } = params;
 
   if (registeredSkills.has(skillName)) {
     logger.debug(`jwt-auth: timer already registered for skill "${skillName}", skipping`);
@@ -234,9 +259,12 @@ function scheduleJwtRefresh(params: {
   // 立即执行一次
   void refreshJwtForSkill({ skillName, config, logger });
 
-  // 每 N 分钟执行一次
+  // 每 N 分钟执行一次，先检测 skill 目录是否还存在
   const intervalMs = (config.refreshIntervalMinutes ?? 45) * 60 * 1000;
   const timer = setInterval(() => {
+    if (!checkSkillExists(skillDir, skillName, logger)) {
+      return;
+    }
     void refreshJwtForSkill({ skillName, config, logger });
   }, intervalMs);
 
@@ -318,7 +346,7 @@ export default function register(api: OpenClawPluginApi) {
       );
 
       // 注册定时任务（幂等，重复调用无副作用）
-      scheduleJwtRefresh({ skillName, config, logger: api.logger });
+      scheduleJwtRefresh({ skillName, skillDir, config, logger: api.logger });
 
       // 不阻断工具调用，仅旁路触发定时任务
     },
