@@ -1,4 +1,14 @@
 {
+  "browser": {
+    "enabled": true,
+    "defaultProfile": "openclaw",
+    "profiles": {
+      "openclaw": {
+        "cdpUrl": "http://127.0.0.1:9222 ",
+        "color": "#FF4500"
+      }
+    }
+  },
   "meta": {
     "lastTouchedVersion": "2026.2.26",
     "lastTouchedAt": "2026-02-27T08:25:14.652Z"
