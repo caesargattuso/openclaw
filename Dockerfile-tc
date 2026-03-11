@@ -92,11 +92,14 @@ ENV ONEAI_OPENAI_BASE_URL=https://oneai.17usoft.com/v1 \
 
 COPY ["supervisord.conf", "/etc/"]
 
-ENV SSO_ENV=qa
+ENV SSO_ENV=product \
+    JWT_URL=https://toca.17u.cn/open-api/auth/openclaw-jwt
+
 WORKDIR /scripts/browser_daemon
-RUN wget http://oss.17usoft.com/toca-visual-express/product/im/11b0c910215940ae92f33ee8672e3be4_585951698.zip -O browser_daemon.zip && \
+RUN wget http://oss.17usoft.com/toca-visual-express/product/im/47b4dadf20364892b57ef4a1b42efd9e_585951698.zip -O browser_daemon.zip && \
     unzip browser_daemon.zip  && \
-    rm -rf browser_daemon.zip
+    rm -rf browser_daemon.zip && \
+    chown -R openclaw:openclaw /scripts/browser_daemon
 
 WORKDIR /home/openclaw
 
