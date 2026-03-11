@@ -4,7 +4,7 @@
     "defaultProfile": "openclaw",
     "profiles": {
       "openclaw": {
-        "cdpUrl": "http://127.0.0.1:9222 ",
+        "cdpUrl": "http://127.0.0.1:9222",
         "color": "#FF4500"
       }
     }

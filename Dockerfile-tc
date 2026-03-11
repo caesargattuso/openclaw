@@ -53,7 +53,9 @@ RUN pip install \
     opencv-python \
     playwright \
     html2text \
-    pyyaml
+    pyyaml \
+    PyMuPDF \
+    python-pptx
 
 # 安装openclaw
 #RUN npm install -g --registry=https://registry.npmmirror.com openclaw@${OPENCLAW_VERSION}
@@ -92,8 +94,8 @@ COPY ["supervisord.conf", "/etc/"]
 
 ENV SSO_ENV=qa
 WORKDIR /scripts/browser_daemon
-RUN wget http://oss.17usoft.com/toca-visual-express/product/im/8da3772a4b434a42ae1dfd6aeb442d79_585951698.zip -O browser_daemon.zip && \
-    unzip browser_daemon.zip && \
+RUN wget http://oss.17usoft.com/toca-visual-express/product/im/7ba5ad2befc245b198593ab1d4b6034b_585951698.zip -O browser_daemon.zip && \
+    unzip browser_daemon.zip ; \
     rm -rf browser_daemon.zip
 
 WORKDIR /home/openclaw
