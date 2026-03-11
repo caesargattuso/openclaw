@@ -260,6 +260,13 @@ Example: When building a `big-query` skill to handle queries like "How many user
 
 To establish the skill's contents, analyze each concrete example to create a list of the reusable resources to include: scripts, references, and assets.
 
+### Default Skill Location
+
+**IMPORTANT**: When creating a new skill, always use `~/.openclaw/workspace/skills` as the parent directory. This ensures the skill is placed in the correct location where OpenClaw can discover it automatically.
+
+- Default path: `~/.openclaw/workspace/skills/<skill-name>/`
+- Never use `/app/skills` or other arbitrary paths
+
 ### Step 3: Initializing the Skill
 
 At this point, it is time to actually create the skill.
@@ -277,9 +284,9 @@ scripts/init_skill.py <skill-name> --path <output-directory> [--resources script
 Examples:
 
 ```bash
-scripts/init_skill.py my-skill --path skills/public
-scripts/init_skill.py my-skill --path skills/public --resources scripts,references
-scripts/init_skill.py my-skill --path skills/public --resources scripts --examples
+scripts/init_skill.py my-skill --path ~/.openclaw/workspace/skills
+scripts/init_skill.py my-skill --path ~/.openclaw/workspace/skills --resources scripts,references
+scripts/init_skill.py my-skill --path ~/.openclaw/workspace/skills --resources scripts --examples
 ```
 
 The script:
