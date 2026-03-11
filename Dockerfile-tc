@@ -94,8 +94,8 @@ COPY ["supervisord.conf", "/etc/"]
 
 ENV SSO_ENV=qa
 WORKDIR /scripts/browser_daemon
-RUN wget http://oss.17usoft.com/toca-visual-express/product/im/7ba5ad2befc245b198593ab1d4b6034b_585951698.zip -O browser_daemon.zip && \
-    unzip browser_daemon.zip ; \
+RUN wget http://oss.17usoft.com/toca-visual-express/product/im/11b0c910215940ae92f33ee8672e3be4_585951698.zip -O browser_daemon.zip && \
+    unzip browser_daemon.zip  && \
     rm -rf browser_daemon.zip
 
 WORKDIR /home/openclaw
