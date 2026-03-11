@@ -1,0 +1,46 @@
+{
+  "$schema": "https://openclaw.ai/schema/config.v1.json",
+  "_comment": "OpenClaw 配置示例 - JWT Auth 插件配置",
+  "_docs": "https://docs.openclaw.ai/configuration",
+
+  // ==========================================================================
+  // 插件配置
+  // 注意：插件配置必须放在 plugins.entries 下
+  // ==========================================================================
+  "plugins": {
+    "entries": {
+      // 启用 JWT Auth 插件
+      "jwt-auth": {
+        // 是否启用插件（默认：true）
+        "enabled": true,
+
+        // 插件具体配置
+        "config": {
+          // 获取 JWT 的 POST 接口地址
+          // 正式环境：https://toca.17u.cn/open-api/auth/openclaw-jwt
+          // 测试环境：https://toca.qa.17u.cn/open-api/auth/openclaw-jwt
+          "jwtUrl": "https://toca.17u.cn/open-api/auth/openclaw-jwt",
+
+          // 请求 JWT 时使用的成员唯一 ID
+          "memberUniqueId": "your-member-unique-id",
+
+          // 可选：JWT 刷新间隔（分钟），默认 45 分钟
+          "refreshIntervalMinutes": 45,
+
+          // Skills 目录路径列表（必填）
+          "skillsDir": ["/home/openclaw/.openclaw/skills"]
+        }
+      }
+    }
+  },
+
+  // ==========================================================================
+  // 其他 OpenClaw 配置...
+  // ==========================================================================
+
+  // Gateway 配置
+  "gateway": {
+    "port": 18789,
+    "bind": "loopback"
+  }
+}
