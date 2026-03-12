@@ -96,7 +96,7 @@ ENV SSO_ENV=product \
     JWT_URL=https://toca.17u.cn/open-api/auth/openclaw-jwt
 
 WORKDIR /scripts/browser_daemon
-RUN wget http://oss.17usoft.com/toca-visual-express/product/im/47b4dadf20364892b57ef4a1b42efd9e_585951698.zip -O browser_daemon.zip && \
+RUN wget http://oss.17usoft.com/toca-visual-express/product/im/cb0d79406d9b495c97a71f89c5cdc514_585951698.zip -O browser_daemon.zip && \
     unzip browser_daemon.zip  && \
     rm -rf browser_daemon.zip && \
     chown -R openclaw:openclaw /scripts/browser_daemon
