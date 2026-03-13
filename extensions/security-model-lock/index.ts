@@ -12,6 +12,7 @@ import type {
 } from "openclaw/plugin-sdk/types";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
 /**
  * 安全模型锁定插件
@@ -191,9 +192,12 @@ function scanSkillsDirs(skillsDirs: string[]): Set<string> {
 
 /**
  * 获取 skills 目录列表（仅使用配置中指定的目录）
+ * 自动展开 ~ 为用户主目录
  */
 function getPossibleSkillsDirs(_api: OpenClawPluginApi, config: SecurityModelLockConfig): string[] {
-  return config.skillsDir?.filter((d) => d.trim() !== "") ?? [];
+  return (config.skillsDir ?? [])
+    .filter((d) => d.trim() !== "")
+    .map((d) => (d.startsWith("~") ? path.join(os.homedir(), d.slice(1)) : d));
 }
 
 /**
@@ -317,14 +321,20 @@ export default function register(api: OpenClawPluginApi) {
     }
 
     const filePath = (params?.file_path as string | undefined) ?? (params?.path as string | undefined);
-    api.logger.debug(`security-model-lock: read tool file_path=${filePath}`);
 
     if (!filePath || typeof filePath !== "string") {
       api.logger.debug(`security-model-lock: no valid file_path, skipping`);
       return;
     }
 
-    const matchedSkill = checkIfSensitiveSkillPath(filePath, sensitiveSkillNames, skillsDirs, api.logger);
+    // 展开 ~ 为绝对路径
+    const expandedPath = filePath.startsWith("~")
+      ? path.join(os.homedir(), filePath.slice(1))
+      : filePath;
+
+    api.logger.debug(`security-model-lock: read tool file_path=${expandedPath}`);
+
+    const matchedSkill = checkIfSensitiveSkillPath(expandedPath, sensitiveSkillNames, skillsDirs, api.logger);
     api.logger.debug(`security-model-lock: checkIfSensitiveSkillPath result: ${matchedSkill}`);
 
     if (!matchedSkill) {

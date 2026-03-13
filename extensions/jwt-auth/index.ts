@@ -54,7 +54,9 @@ function parseConfig(api: OpenClawPluginApi): JwtAuthConfig | null {
   const raw = api.pluginConfig as Partial<JwtAuthConfig> | undefined;
 
   const skillsDir = Array.isArray(raw?.skillsDir)
-    ? raw.skillsDir.filter((d): d is string => typeof d === "string" && d.trim() !== "")
+    ? raw.skillsDir
+        .filter((d): d is string => typeof d === "string" && d.trim() !== "")
+        .map((d) => (d.startsWith("~") ? path.join(os.homedir(), d.slice(1)) : d))
     : [];
 
   if (!raw?.jwtUrl || !raw?.memberUniqueId || skillsDir.length === 0) {
@@ -238,12 +240,12 @@ function checkSkillExists(skillDir: string, skillName: string, logger: OpenClawP
   return true;
 }
 
-function scheduleJwtRefresh(params: {
+async function scheduleJwtRefresh(params: {
   skillName: string;
   skillDir: string;
   config: JwtAuthConfig;
   logger: OpenClawPluginApi["logger"];
-}): void {
+}): Promise<void> {
   const { skillName, skillDir, config, logger } = params;
 
   if (registeredSkills.has(skillName)) {
@@ -256,8 +258,8 @@ function scheduleJwtRefresh(params: {
     `jwt-auth: scheduling JWT refresh for skill "${skillName}" every ${config.refreshIntervalMinutes} minutes`,
   );
 
-  // 立即执行一次
-  void refreshJwtForSkill({ skillName, config, logger });
+  // 立即执行一次，同步等待完成
+  await refreshJwtForSkill({ skillName, config, logger });
 
   // 每 N 分钟执行一次，先检测 skill 目录是否还存在
   const intervalMs = (config.refreshIntervalMinutes ?? 45) * 60 * 1000;
@@ -305,10 +307,10 @@ export default function register(api: OpenClawPluginApi) {
   // ============================================================================
   api.on(
     "before_tool_call",
-    (
+    async (
       event: PluginHookBeforeToolCallEvent,
       _ctx: PluginHookToolContext,
-    ): PluginHookBeforeToolCallResult | void => {
+    ): Promise<PluginHookBeforeToolCallResult | void> => {
       const { toolName, params } = event;
 
       // 只关心 read 工具
@@ -323,9 +325,14 @@ export default function register(api: OpenClawPluginApi) {
         return;
       }
 
-      api.logger.debug(`jwt-auth: read tool detected, file_path=${filePath}`);
+      // 展开 ~ 为绝对路径
+      const expandedPath = filePath.startsWith("~")
+        ? path.join(os.homedir(), filePath.slice(1))
+        : filePath;
 
-      const match = extractSkillFromPath(filePath, skillsDirs);
+      api.logger.debug(`jwt-auth: read tool detected, file_path=${expandedPath}`);
+
+      const match = extractSkillFromPath(expandedPath, skillsDirs);
       if (!match) {
         return;
       }
@@ -345,8 +352,8 @@ export default function register(api: OpenClawPluginApi) {
         `jwt-auth: ${skillDir}/config.yaml need_authentication=true, scheduling JWT refresh for skill "${skillName}"`,
       );
 
-      // 注册定时任务（幂等，重复调用无副作用）
-      scheduleJwtRefresh({ skillName, skillDir, config, logger: api.logger });
+      // 注册定时任务，同步等待第一次 JWT 获取完成
+      await scheduleJwtRefresh({ skillName, skillDir, config, logger: api.logger });
 
       // 不阻断工具调用，仅旁路触发定时任务
     },
